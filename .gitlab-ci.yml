@@ -1,0 +1,100 @@
+stages:
+  - test
+  - sast
+  - dependency-check
+  - docker-build
+  - dast
+  - deploy-stage
+  - deploy-prod
+
+variables:
+  DOCKER_IMAGE: registry.gitlab.com/$CI_PROJECT_PATH
+
+default:
+  image: python:3.12-slim
+
+before_script:
+  - apt-get update && apt-get install -y --no-install-recommends gcc curl
+  - pip install --no-cache-dir -r requirements.txt
+
+test:
+  stage: test
+  script:
+    - pytest tests/ -v --cov=app --cov-report=term --cov-report=html:reports/coverage
+  artifacts:
+    paths:
+      - reports/coverage/
+    expire_in: 30 days
+
+bandit-sast:
+  stage: sast
+  script:
+    - pip install bandit
+    - bandit -r app/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
+    - bandit -r app/ -c .bandit.yaml || true
+  artifacts:
+    paths:
+      - reports/bandit-report.html
+    expire_in: 30 days
+
+dependency-check:
+  stage: dependency-check
+  image:
+    name: owasp/dependency-check:latest
+    entrypoint: [""]
+  script:
+    - mkdir -p reports/dependency-check
+    - /usr/share/dependency-check/bin/dependency-check.sh
+      --project "tasksec"
+      --scan .
+      --format HTML
+      --out reports/dependency-check
+  artifacts:
+    paths:
+      - reports/dependency-check/
+    expire_in: 30 days
+
+docker-build:
+  stage: docker-build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker run -d --name tasksec-app -p 8080:8080 $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - sleep 5
+    - curl -f http://localhost:8080/health
+  artifacts:
+    expire_in: 30 days
+
+zap-dast:
+  stage: dast
+  image:
+    name: zaproxy/zap-stable:latest
+    entrypoint: [""]
+  script:
+    - zap-baseline.py -t http://docker:8080 -J reports/zap-report.json -w reports/zap-report.md || true
+  artifacts:
+    paths:
+      - reports/zap-report.json
+      - reports/zap-report.md
+    expire_in: 30 days
+
+deploy-stage:
+  stage: deploy-stage
+  script:
+    - echo "Deploy em stage (simulado)"
+    - docker compose -f docker-compose.yml up -d --build
+  environment: staging
+  only:
+    - staging
+    - main
+
+deploy-prod:
+  stage: deploy-prod
+  script:
+    - echo "Deploy em producao — requer aprovacao manual"
+  environment: production
+  when: manual
+  only:
+    - main

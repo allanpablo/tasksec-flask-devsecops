@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: tasksec-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-changeme-in-production}
+      - DATABASE_URL=sqlite:///data/tasks.db
+      - SYSLOG_HOST=syslog
+      - SYSLOG_PORT=514
+    volumes:
+      - app_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - syslog
+    restart: unless-stopped
+
+  syslog:
+    image: balabit/syslog-ng:latest
+    container_name: tasksec-syslog
+    ports:
+      - "514:514/udp"
+      - "601:601/tcp"
+    volumes:
+      - syslog_data:/var/log
+    restart: unless-stopped
+
+volumes:
+  app_data:
+  syslog_data:

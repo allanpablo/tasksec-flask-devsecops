@@ -1,0 +1,143 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ main, develop, staging ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with pytest
+        run: |
+          python -m pytest tests/ -v --cov=app --cov-report=term --cov-report=html:reports/coverage
+          echo "COVERAGE_EXIT=0" >> $GITHUB_ENV
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: reports/coverage/
+
+  bandit-sast:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install bandit
+          pip install -r requirements.txt
+
+      - name: Run Bandit SAST
+        run: |
+          bandit -r app/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
+          bandit -r app/ -c .bandit.yaml || true
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: reports/bandit-report.html
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "tasksec"
+          path: "."
+          format: "HTML"
+          out: "reports/dependency-check"
+
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports/dependency-check/
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [bandit-sast, dependency-check]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build -t tasksec-app:${{ github.sha }} .
+
+      - name: Run container for ZAP testing
+        run: |
+          docker run -d --name tasksec-app -p 8080:8080 tasksec-app:${{ github.sha }}
+          sleep 5
+          curl -f http://localhost:8080/health || exit 1
+
+      - name: Run OWASP ZAP DAST
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: "http://localhost:8080"
+          rules_file_name: ".zap/rules.tsv"
+          cmd_options: "-a -j -J reports/zap-report.json -w reports/zap-report.md"
+          allow_issue_writing: false
+
+      - name: Stop container
+        run: docker stop tasksec-app
+
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap-report.*
+
+  deploy-stage:
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: docker-build
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to stage
+        run: |
+          echo "Deploy em stage (simulado)"
+          docker compose -f docker-compose.yml up -d --build
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: deploy-stage
+    environment: production
+    steps:
+      - name: Deploy to production (manual)
+        run: |
+          echo "Deploy em produção — aprovação manual necessária"
