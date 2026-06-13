@@ -111,6 +111,7 @@ deploy-stage:
     - echo "Deploy em stage (simulado)"
   environment: staging
   only:
+    - homolog
     - staging
     - main
 
