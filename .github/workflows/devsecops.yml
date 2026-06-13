@@ -133,16 +133,19 @@ jobs:
           curl -f http://localhost:8080/health || exit 1
 
       - name: Prepare ZAP report directory
-        run: mkdir -p reports
+        run: |
+          mkdir -p reports
+          cp .zap/rules.tsv reports/rules.tsv
+          chmod 777 reports
 
       - name: Run OWASP ZAP DAST
         run: |
-          docker run --rm --network host -v "$PWD:/zap/wrk" \
+          docker run --rm --network host -v "$PWD/reports:/zap/wrk" \
             zaproxy/zap-stable:latest \
             zap-baseline.py -t http://127.0.0.1:8080 \
-            -c .zap/rules.tsv \
-            -J reports/zap-report.json \
-            -w reports/zap-report.md
+            -c rules.tsv \
+            -J zap-report.json \
+            -w zap-report.md
 
       - name: Stop container
         if: always()
