@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests with pytest
         run: |
-          python -m pytest tests/ -v --cov=app --cov-report=term --cov-report=html:reports/coverage
+          python -m pytest tests/ -v --cov=todo_project.todo_project --cov-report=term --cov-report=html:reports/coverage
           echo "COVERAGE_EXIT=0" >> $GITHUB_ENV
 
       - name: Upload coverage report
@@ -56,8 +56,8 @@ jobs:
       - name: Run Bandit SAST
         run: |
           mkdir -p reports
-          bandit -r app/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
-          bandit -r app/ -c .bandit.yaml || true
+          bandit -r todo_project/todo_project/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
+          bandit -r todo_project/todo_project/ -c .bandit.yaml || true
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
@@ -75,7 +75,7 @@ jobs:
         continue-on-error: true
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          project: "tasksec"
+          project: "task-manager-flask"
           path: "."
           format: "HTML"
           out: "reports/dependency-check"
@@ -124,11 +124,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        run: docker build -t tasksec-app:${{ github.sha }} .
+        run: docker build -t task-manager-app:${{ github.sha }} .
 
       - name: Run container for ZAP testing
         run: |
-          docker run -d --name tasksec-app -p 8080:8080 tasksec-app:${{ github.sha }}
+          docker run -d --name task-manager-app -p 8080:8080 task-manager-app:${{ github.sha }}
           sleep 5
           curl -f http://localhost:8080/health || exit 1
 
@@ -149,7 +149,7 @@ jobs:
 
       - name: Stop container
         if: always()
-        run: docker stop tasksec-app
+        run: docker stop task-manager-app
 
       - name: Upload ZAP report
         if: always()

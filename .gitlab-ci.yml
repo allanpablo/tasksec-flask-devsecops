@@ -22,7 +22,7 @@ before_script:
 test:
   stage: test
   script:
-    - pytest tests/ -v --cov=app --cov-report=term --cov-report=html:reports/coverage
+    - pytest tests/ -v --cov=todo_project.todo_project --cov-report=term --cov-report=html:reports/coverage
   artifacts:
     paths:
       - reports/coverage/
@@ -33,8 +33,8 @@ bandit-sast:
   script:
     - pip install bandit
     - mkdir -p reports
-    - bandit -r app/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
-    - bandit -r app/ -c .bandit.yaml || true
+    - bandit -r todo_project/todo_project/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
+    - bandit -r todo_project/todo_project/ -c .bandit.yaml || true
   artifacts:
     paths:
       - reports/bandit-report.html
@@ -50,7 +50,7 @@ dependency-check:
   script:
     - mkdir -p reports/dependency-check
     - /usr/share/dependency-check/bin/dependency-check.sh
-      --project "tasksec"
+      --project "task-manager-flask"
       --scan .
       --format HTML
       --out reports/dependency-check
@@ -79,7 +79,7 @@ docker-build:
   before_script: []
   script:
     - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
-    - docker run -d --name tasksec-app -p 8080:8080 $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - docker run -d --name task-manager-app -p 8080:8080 $DOCKER_IMAGE:$CI_COMMIT_SHA
     - sleep 5
     - wget -qO- http://localhost:8080/health
   artifacts:
@@ -93,11 +93,12 @@ zap-dast:
   before_script: []
   script:
     - mkdir -p reports
-    - docker network create tasksec-ci
-    - docker build -t tasksec-app:$CI_COMMIT_SHA .
-    - docker run -d --name tasksec-app --network tasksec-ci tasksec-app:$CI_COMMIT_SHA
+    - cp .zap/rules.tsv reports/rules.tsv
+    - docker network create task-manager-ci
+    - docker build -t task-manager-app:$CI_COMMIT_SHA .
+    - docker run -d --name task-manager-app --network task-manager-ci task-manager-app:$CI_COMMIT_SHA
     - sleep 8
-    - docker run --rm --network tasksec-ci -v "$PWD/reports:/zap/wrk" zaproxy/zap-stable:latest zap-baseline.py -t http://tasksec-app:8080 -J zap-report.json -w zap-report.md || true
+    - docker run --rm --network task-manager-ci -v "$PWD/reports:/zap/wrk" zaproxy/zap-stable:latest zap-baseline.py -t http://task-manager-app:8080 -c rules.tsv -J zap-report.json -w zap-report.md || true
   artifacts:
     paths:
       - reports/zap-report.json

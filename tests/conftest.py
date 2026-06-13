@@ -2,7 +2,7 @@ import os
 import tempfile
 
 import pytest
-from app import create_app, db
+from todo_project.todo_project import create_app, db
 
 
 @pytest.fixture
@@ -20,6 +20,11 @@ def app():
         db.create_all()
 
     yield app
+
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.engine.dispose()
 
     os.close(db_fd)
     os.unlink(db_path)
@@ -42,25 +47,24 @@ def auth(client):
             self._client = client
 
         def register(
-            self, username="testuser", email="test@example.com", password="secret123"
+            self, username="testuser", password="secret123"
         ):
             return self._client.post(
-                "/auth/register",
+                "/register",
                 data={
                     "username": username,
-                    "email": email,
                     "password": password,
-                    "password2": password,
+                    "confirm_password": password,
                 },
             )
 
         def login(self, username="testuser", password="secret123"):
             return self._client.post(
-                "/auth/login",
+                "/login",
                 data={"username": username, "password": password},
             )
 
         def logout(self):
-            return self._client.get("/auth/logout")
+            return self._client.get("/logout")
 
     return AuthActions(client)

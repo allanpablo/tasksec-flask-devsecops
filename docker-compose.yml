@@ -1,12 +1,13 @@
 services:
   app:
     build: .
-    container_name: tasksec-app
+    image: task-manager-flask:local
+    container_name: task-manager-app
     ports:
       - "8080:8080"
     environment:
       - SECRET_KEY=${SECRET_KEY:-changeme-in-production}
-      - DATABASE_URL=sqlite:////app/data/tasks.db
+      - DATABASE_URL=sqlite:////app/data/site.db
       - FLASK_INSTANCE_PATH=/app/data/instance
       - SYSLOG_HOST=syslog
       - SYSLOG_PORT=514
@@ -32,7 +33,7 @@ services:
 
   syslog:
     image: balabit/syslog-ng:latest
-    container_name: tasksec-syslog
+    container_name: task-manager-syslog
     ports:
       - "514:514/udp"
       - "601:601/tcp"
