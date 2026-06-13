@@ -20,5 +20,6 @@ coverage/
 docs/
 tests/
 fail2ban/
+INSTRUÇÕES/
 *.md
 .bandit.yaml

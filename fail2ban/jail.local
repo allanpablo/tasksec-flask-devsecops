@@ -1,7 +1,7 @@
 [tasksec]
 enabled = true
 port = http,8080
-filter = tasksec-auth
+filter = filter-app
 logpath = /var/log/app-auth.log
 maxretry = 5
 bantime = 3600

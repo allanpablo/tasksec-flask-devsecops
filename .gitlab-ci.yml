@@ -9,6 +9,8 @@ stages:
 
 variables:
   DOCKER_IMAGE: registry.gitlab.com/$CI_PROJECT_PATH
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
 
 default:
   image: python:3.12-slim
@@ -30,6 +32,7 @@ bandit-sast:
   stage: sast
   script:
     - pip install bandit
+    - mkdir -p reports
     - bandit -r app/ -f html -o reports/bandit-report.html -c .bandit.yaml || true
     - bandit -r app/ -c .bandit.yaml || true
   artifacts:
@@ -42,6 +45,8 @@ dependency-check:
   image:
     name: owasp/dependency-check:latest
     entrypoint: [""]
+  before_script: []
+  allow_failure: true
   script:
     - mkdir -p reports/dependency-check
     - /usr/share/dependency-check/bin/dependency-check.sh
@@ -50,8 +55,20 @@ dependency-check:
       --format HTML
       --out reports/dependency-check
   artifacts:
+    when: always
     paths:
       - reports/dependency-check/
+    expire_in: 30 days
+
+pip-audit-sca:
+  stage: dependency-check
+  script:
+    - pip install pip-audit
+    - mkdir -p reports/dependency-check
+    - python -m pip_audit -r requirements.txt --no-deps --disable-pip -f json -o reports/dependency-check/pip-audit-report.json
+  artifacts:
+    paths:
+      - reports/dependency-check/pip-audit-report.json
     expire_in: 30 days
 
 docker-build:
@@ -59,21 +76,28 @@ docker-build:
   image: docker:latest
   services:
     - docker:dind
+  before_script: []
   script:
     - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
     - docker run -d --name tasksec-app -p 8080:8080 $DOCKER_IMAGE:$CI_COMMIT_SHA
     - sleep 5
-    - curl -f http://localhost:8080/health
+    - wget -qO- http://localhost:8080/health
   artifacts:
     expire_in: 30 days
 
 zap-dast:
   stage: dast
-  image:
-    name: zaproxy/zap-stable:latest
-    entrypoint: [""]
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script: []
   script:
-    - zap-baseline.py -t http://docker:8080 -J reports/zap-report.json -w reports/zap-report.md || true
+    - mkdir -p reports
+    - docker network create tasksec-ci
+    - docker build -t tasksec-app:$CI_COMMIT_SHA .
+    - docker run -d --name tasksec-app --network tasksec-ci tasksec-app:$CI_COMMIT_SHA
+    - sleep 8
+    - docker run --rm --network tasksec-ci -v "$PWD/reports:/zap/wrk" zaproxy/zap-stable:latest zap-baseline.py -t http://tasksec-app:8080 -J zap-report.json -w zap-report.md || true
   artifacts:
     paths:
       - reports/zap-report.json
@@ -82,9 +106,9 @@ zap-dast:
 
 deploy-stage:
   stage: deploy-stage
+  before_script: []
   script:
     - echo "Deploy em stage (simulado)"
-    - docker compose -f docker-compose.yml up -d --build
   environment: staging
   only:
     - staging
@@ -92,6 +116,7 @@ deploy-stage:
 
 deploy-prod:
   stage: deploy-prod
+  before_script: []
   script:
     - echo "Deploy em producao — requer aprovacao manual"
   environment: production

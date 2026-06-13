@@ -1,0 +1,5 @@
+# zaproxy/action-baseline rules file.
+10031	IGNORE	Form fields are escaped by Jinja2 and protected by CSRF; reviewed as false positive in this study.
+10049	IGNORE	No-store cache headers are intentionally applied to dynamic pages.
+10111	IGNORE	Login form detection is informational and expected.
+10112	IGNORE	Session management detection is informational and expected.

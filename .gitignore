@@ -5,6 +5,10 @@ instance/
 .venv/
 venv/
 .env
+INSTRUÇÕES/
+.agents/
+.codex/
+docs/
 reports/
 *.egg-info/
 dist/

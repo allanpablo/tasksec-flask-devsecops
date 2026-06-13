@@ -6,7 +6,8 @@ services:
       - "8080:8080"
     environment:
       - SECRET_KEY=${SECRET_KEY:-changeme-in-production}
-      - DATABASE_URL=sqlite:///data/tasks.db
+      - DATABASE_URL=sqlite:////app/data/tasks.db
+      - FLASK_INSTANCE_PATH=/app/data/instance
       - SYSLOG_HOST=syslog
       - SYSLOG_PORT=514
     volumes:
@@ -41,6 +42,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      - /var/lib/syslog-ng
     security_opt:
       - no-new-privileges:true
 

@@ -13,7 +13,11 @@ csrf = CSRFProtect()
 
 
 def create_app(config_class_name="config.Config", config_override=None):
-    app = Flask(__name__)
+    instance_path = os.environ.get("FLASK_INSTANCE_PATH")
+    if instance_path:
+        app = Flask(__name__, instance_path=instance_path)
+    else:
+        app = Flask(__name__)
     app.config.from_object(config_class_name)
     if config_override:
         app.config.update(config_override)
@@ -26,6 +30,7 @@ def create_app(config_class_name="config.Config", config_override=None):
     login_manager.login_message_category = "info"
 
     _configure_logging(app)
+    _configure_security_headers(app)
 
     from app.routes import auth_bp, main_bp, task_bp
 
@@ -38,6 +43,36 @@ def create_app(config_class_name="config.Config", config_override=None):
         db.create_all()
 
     return app
+
+
+def _configure_security_headers(app):
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.jsdelivr.net; "
+            "style-src 'self' https://cdn.jsdelivr.net; "
+            "font-src 'self' https://cdn.jsdelivr.net data:; "
+            "img-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'",
+        )
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), geolocation=(), microphone=()"
+        )
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Embedder-Policy", "credentialless")
+        response.headers.setdefault(
+            "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        return response
 
 
 def _configure_logging(app):
